@@ -18,16 +18,17 @@ import android.content.DialogInterface
 import androidx.annotation.NonNull
 
 
-
-
 class MainActivityTemp : AppCompatActivity(),
     EasyPermissions.PermissionCallbacks {
 
+    private var mGeoLocationOrigin: String? = null
+    private var mGeoLocationCallback: GeolocationPermissions.Callback? = null
     val tag = MainActivityTemp::class.simpleName
     private val TAG = "TEST"
     private var mPermissionRequest: PermissionRequest? = null
 
-    private val REQUEST_CAMERA_PERMISSION :Int = 1
+    private val REQUEST_CAMERA_PERMISSION: Int = 1
+    private val REQUEST_LOCATION_PERMISSION: Int = 2
     private val PERM_CAMERA = arrayOf(Manifest.permission.CAMERA)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +37,7 @@ class MainActivityTemp : AppCompatActivity(),
         initWebView()
         webView.loadUrl("https://permission.site")
     }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String?>,
@@ -130,7 +132,11 @@ class MainActivityTemp : AppCompatActivity(),
                                         dialog.dismiss()
                                         mPermissionRequest!!.deny()
                                         Log.d(TAG, "Denied")
-                                        Toast.makeText(this@MainActivityTemp, "Permission Denied", Toast.LENGTH_SHORT)
+                                        Toast.makeText(
+                                            this@MainActivityTemp,
+                                            "Permission Denied",
+                                            Toast.LENGTH_SHORT
+                                        )
                                             .show()
                                     }
                                 val alertDialog = alertDialogBuilder.create()
@@ -140,6 +146,44 @@ class MainActivityTemp : AppCompatActivity(),
 
                             break
                         }
+                    }
+                }
+
+                override fun onGeolocationPermissionsShowPrompt(
+                    origin: String,
+                    callback: GeolocationPermissions.Callback
+                ) {
+                    Log.e(TAG, "Location perm start")
+                    mGeoLocationCallback = callback
+                    mGeoLocationOrigin = origin
+                    // Do We need to ask for permission?
+                    if (hasLocationPermission()) {
+                        callback.invoke(origin, true, false)
+                    } else {
+                        val alertDialogBuilder = AlertDialog.Builder(this@MainActivityTemp)
+                            .setTitle("Allow Permission to location")
+                            .setPositiveButton("Allow") { dialog, which ->
+                                dialog.dismiss()
+                                EasyPermissions.requestPermissions(
+                                    this@MainActivityTemp,
+                                    "This app needs access to your location to access",
+                                    REQUEST_LOCATION_PERMISSION,
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                )
+                            }
+                            .setNegativeButton("Deny") { dialog, which ->
+                                dialog.dismiss()
+                                callback.invoke(origin, false, false)
+                                Log.d(TAG, "Denied")
+                                Toast.makeText(
+                                    this@MainActivityTemp,
+                                    "Permission Denied",
+                                    Toast.LENGTH_SHORT
+                                )
+                                    .show()
+                            }
+                        val alertDialog = alertDialogBuilder.create()
+                        alertDialog.show()
                     }
                 }
 
@@ -158,22 +202,41 @@ class MainActivityTemp : AppCompatActivity(),
         return EasyPermissions.hasPermissions(this@MainActivityTemp, Manifest.permission.CAMERA)
     }
 
-    private fun isGranted(permission: String): Boolean {
-        return ActivityCompat.checkSelfPermission(this, permission) ==
-                PackageManager.PERMISSION_GRANTED
+    private fun hasLocationPermission(): Boolean {
+        return EasyPermissions.hasPermissions(
+            this@MainActivityTemp,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        )
     }
 
-
     override fun onPermissionsGranted(requestCode: Int, perms: MutableList<String>) {
-        mPermissionRequest!!.grant(arrayOf(PermissionRequest.RESOURCE_VIDEO_CAPTURE))
-        Log.d(TAG, "Granted")
+        when (requestCode) {
+            REQUEST_CAMERA_PERMISSION -> {
+                mPermissionRequest!!.grant(arrayOf(PermissionRequest.RESOURCE_VIDEO_CAPTURE))
+            }
+            REQUEST_LOCATION_PERMISSION -> {
+                mGeoLocationOrigin?.let {
+                    mGeoLocationCallback?.invoke(it, true, false)
+                }
+            }
+        }
+        Log.d(TAG, "onPermissionsGranted")
         Toast.makeText(this@MainActivityTemp, "Permission Granted", Toast.LENGTH_SHORT)
             .show()
     }
 
     override fun onPermissionsDenied(requestCode: Int, perms: MutableList<String>) {
-        Log.d(TAG, "Denied")
-        mPermissionRequest!!.deny()
+        Log.d(TAG, "onPermissionsDenied")
+        when (requestCode) {
+            REQUEST_CAMERA_PERMISSION -> {
+                mPermissionRequest!!.deny()
+            }
+            REQUEST_LOCATION_PERMISSION -> {
+                mGeoLocationOrigin?.let {
+                    mGeoLocationCallback?.invoke(it, false, false)
+                }
+            }
+        }
         Toast.makeText(this@MainActivityTemp, "Permission Denied", Toast.LENGTH_SHORT)
             .show()
     }
